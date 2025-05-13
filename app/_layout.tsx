@@ -6,12 +6,11 @@ import {
   AuthContextProvider,
   useAuth,
 } from "@/context/authContext";
+import { SmsProvider } from "@/context/smsContext";
 import { useEffect, useState } from "react";
-import { Provider } from "react-redux";
-// import { store } from "@/store/store";
 
-// Updated constants for the AuthContext
-const LAST_UPDATED = "2025-05-13 07:42:45"; 
+// Updated timestamp information
+const LAST_UPDATED = "2025-05-13 10:33:08"; 
 const CURRENT_USER = "Zaheer87";
 
 const MainLayout = () => {
@@ -83,8 +82,6 @@ const MainLayout = () => {
         }}
       />
       
-     
-
       <Stack.Screen
         name="signIn"
         options={{
@@ -105,10 +102,11 @@ const MainLayout = () => {
 };
 
 export default function RootLayout() {
- 
   return (
-      <AuthContextProvider>
+    <AuthContextProvider>
+      <SmsProvider>
         <MainLayout />
-      </AuthContextProvider>
+      </SmsProvider>
+    </AuthContextProvider>
   );
 }

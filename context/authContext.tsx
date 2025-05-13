@@ -39,7 +39,7 @@ interface AuthContextType {
     password: string,
     phoneNumber: string
   ) => Promise<{ success: boolean; msg?: string }>;
-  refreshToken: () => Promise<{ success: boolean; msg?: string }>;
+  getRefreshToken: () => Promise<{ success: boolean; msg?: string }>;
   lastUpdated: string;
   currentUser: string;
 }
@@ -64,7 +64,7 @@ const API_URL = Platform.select({
 console.log(`API URL: ${API_URL} | Platform: ${Platform.OS} | Date: ${LAST_UPDATED} | User: ${CURRENT_USER}`);
 
 // Helper functions for storage
-const storeAuthData = async (key: string, value: string) => {
+export const storeAuthData = async (key: string, value: string) => {
   try {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(key, value);
@@ -76,7 +76,7 @@ const storeAuthData = async (key: string, value: string) => {
   }
 };
 
-const getAuthData = async (key: string): Promise<string | null> => {
+export const getAuthData = async (key: string): Promise<string | null> => {
   try {
     if (typeof localStorage !== 'undefined') {
       return localStorage.getItem(key);
@@ -88,7 +88,7 @@ const getAuthData = async (key: string): Promise<string | null> => {
   }
 };
 
-const removeAuthData = async (key: string) => {
+export const removeAuthData = async (key: string) => {
   try {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(key);
@@ -109,15 +109,41 @@ export const AuthContextProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        const username = await getAuthData("username");
+
+        // const response = await fetch(${API_URL}/auth/v1/ping, {
+        //   method: "GET",
+        //   headers: {
+        //     "Authorization": Bearer ${accessToken},
+        //   },
+        //   signal: controller.signal
+        // });
         const accessToken = await getAuthData("accessToken");
+        const username = await getAuthData("username");
         const refreshToken = await getAuthData("token");
+
+        const isLoggedIn = await fetch(`${API_URL}/auth/v1/ping`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        })
+
+        const response = await isLoggedIn.text();
+        if(response === ""){
+          // means access token is invalid or expired need to refresh the token
+          const refreshResponse  =  await getRefreshToken();
+          const {success} = refreshResponse; 
+          if(!success){
+            setUser(null);
+            setIsAuthenticated(false);
+            return;
+          }
+        }
+
         
         if (username && accessToken && refreshToken) {
           setUser({ username });
           setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
         }
       } catch (error) {
         console.error("Auth check error:", error);
@@ -352,15 +378,15 @@ export const AuthContextProvider = ({ children }: AuthProviderProps) => {
     }
   };
   
-  const refreshToken = async () => {
+  const getRefreshToken = async () => {
     try {
-      console.log(`[${LAST_UPDATED}] Attempting to refresh token`);
+      // console.log(`[${LAST_UPDATED}] Attempting to refresh token`);
       
       // Get the refresh token
       const token = await getAuthData("token");
       
       if (!token) {
-        console.log(`[${LAST_UPDATED}] No refresh token found`);
+        console.log(` No refresh token found`);
         setIsAuthenticated(false);
         return { success: false, msg: "No refresh token available" };
       }
@@ -395,6 +421,7 @@ export const AuthContextProvider = ({ children }: AuthProviderProps) => {
       
       // Update the access token
       await storeAuthData("accessToken", data.accessToken);
+      await storeAuthData("token", data.token); // This is the new refresh token
       
       // Get current username in case it's not in the response
       const username = await getAuthData("username");
@@ -422,24 +449,7 @@ export const AuthContextProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  // Setup automatic token refresh
-  useEffect(() => {
-    let refreshInterval: NodeJS.Timeout | null = null;
-    
-    if (isAuthenticated) {
-      // Refresh token every 23 hours (tokens seem to be valid for 24 hours)
-      // This ensures the token is refreshed before it expires
-      refreshInterval = setInterval(async () => {
-        await refreshToken();
-      }, 23 * 60 * 60 * 1000); // 23 hours in milliseconds
-    }
-    
-    return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-      }
-    };
-  }, [isAuthenticated]);
+  
 
   return (
     <AuthContext.Provider
@@ -449,7 +459,7 @@ export const AuthContextProvider = ({ children }: AuthProviderProps) => {
         login, 
         logout, 
         register,
-        refreshToken,
+        getRefreshToken,
         lastUpdated: LAST_UPDATED,
         currentUser: CURRENT_USER
       }}
